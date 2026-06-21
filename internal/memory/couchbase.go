@@ -31,6 +31,7 @@ func NewCouchbaseStore(connStr, username, password, bucketName string) (*Couchba
 	}
 
 	if err := cluster.WaitUntilReady(10*time.Second, nil); err != nil {
+		_ = cluster.Close(nil)
 		return nil, fmt.Errorf("couchbase wait until ready: %w", err)
 	}
 

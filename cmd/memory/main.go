@@ -55,7 +55,7 @@ func main() {
 	}
 
 	log.Printf("Agent Memory System running at http://localhost:%s/memory", port)
-	if err := srv.ListenAndServe(); err != nil {
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
 }
