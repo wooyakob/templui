@@ -15,6 +15,7 @@ type Store interface {
 	DeleteAgent(ctx context.Context, id string) error
 
 	GetStats(ctx context.Context) (*Stats, error)
+	GetMemoryCounts(ctx context.Context) (map[string]int, error)
 
 	Close() error
 }

@@ -36,6 +36,7 @@ func NewCouchbaseStore(connStr, username, password, bucketName string) (*Couchba
 
 	bucket := cluster.Bucket(bucketName)
 	if err := bucket.WaitUntilReady(10*time.Second, nil); err != nil {
+		_ = cluster.Close(nil)
 		return nil, fmt.Errorf("couchbase bucket wait until ready: %w", err)
 	}
 
@@ -60,7 +61,7 @@ func agentKey(id string) string {
 }
 
 // CreateMemory persists a new memory document.
-func (s *CouchbaseStore) CreateMemory(_ context.Context, m *Memory) error {
+func (s *CouchbaseStore) CreateMemory(ctx context.Context, m *Memory) error {
 	if m.ID == "" {
 		m.ID = fmt.Sprintf("mem-%d", time.Now().UnixNano())
 	}
@@ -71,7 +72,7 @@ func (s *CouchbaseStore) CreateMemory(_ context.Context, m *Memory) error {
 	}
 	m.UpdatedAt = now
 
-	_, err := s.collection.Insert(memoryKey(m.ID), m, nil)
+	_, err := s.collection.Insert(memoryKey(m.ID), m, &gocb.InsertOptions{Context: ctx})
 	if err != nil {
 		return fmt.Errorf("CreateMemory insert: %w", err)
 	}
@@ -79,8 +80,8 @@ func (s *CouchbaseStore) CreateMemory(_ context.Context, m *Memory) error {
 }
 
 // GetMemory retrieves a memory by ID. Returns nil, nil when not found.
-func (s *CouchbaseStore) GetMemory(_ context.Context, id string) (*Memory, error) {
-	result, err := s.collection.Get(memoryKey(id), nil)
+func (s *CouchbaseStore) GetMemory(ctx context.Context, id string) (*Memory, error) {
+	result, err := s.collection.Get(memoryKey(id), &gocb.GetOptions{Context: ctx})
 	if err != nil {
 		if isNotFound(err) {
 			return nil, nil
@@ -96,7 +97,7 @@ func (s *CouchbaseStore) GetMemory(_ context.Context, id string) (*Memory, error
 }
 
 // ListMemories returns memories matching the given filter, sorted by createdAt DESC.
-func (s *CouchbaseStore) ListMemories(_ context.Context, filter MemoryFilter) ([]*Memory, int, error) {
+func (s *CouchbaseStore) ListMemories(ctx context.Context, filter MemoryFilter) ([]*Memory, int, error) {
 	// Build dynamic WHERE clause
 	conditions := []string{"docType = 'memory'"}
 	params := map[string]interface{}{}
@@ -120,6 +121,7 @@ func (s *CouchbaseStore) ListMemories(_ context.Context, filter MemoryFilter) ([
 	countSQL := fmt.Sprintf("SELECT COUNT(*) AS cnt FROM `%s` WHERE %s", s.bucketName, where)
 	countResult, err := s.cluster.Query(countSQL, &gocb.QueryOptions{
 		NamedParameters: params,
+		Context:         ctx,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("ListMemories count query: %w", err)
@@ -144,11 +146,6 @@ func (s *CouchbaseStore) ListMemories(_ context.Context, filter MemoryFilter) ([
 		s.bucketName, where,
 	)
 
-	queryParams := make(map[string]interface{}, len(params))
-	for k, v := range params {
-		queryParams[k] = v
-	}
-
 	if filter.Limit > 0 {
 		dataSQL += fmt.Sprintf(" LIMIT %d", filter.Limit)
 	}
@@ -157,7 +154,8 @@ func (s *CouchbaseStore) ListMemories(_ context.Context, filter MemoryFilter) ([
 	}
 
 	rows, err := s.cluster.Query(dataSQL, &gocb.QueryOptions{
-		NamedParameters: queryParams,
+		NamedParameters: params,
+		Context:         ctx,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("ListMemories data query: %w", err)
@@ -179,9 +177,9 @@ func (s *CouchbaseStore) ListMemories(_ context.Context, filter MemoryFilter) ([
 }
 
 // UpdateMemory replaces an existing memory document.
-func (s *CouchbaseStore) UpdateMemory(_ context.Context, m *Memory) error {
+func (s *CouchbaseStore) UpdateMemory(ctx context.Context, m *Memory) error {
 	m.UpdatedAt = time.Now()
-	_, err := s.collection.Replace(memoryKey(m.ID), m, nil)
+	_, err := s.collection.Replace(memoryKey(m.ID), m, &gocb.ReplaceOptions{Context: ctx})
 	if err != nil {
 		return fmt.Errorf("UpdateMemory replace: %w", err)
 	}
@@ -189,8 +187,8 @@ func (s *CouchbaseStore) UpdateMemory(_ context.Context, m *Memory) error {
 }
 
 // DeleteMemory removes a memory document by ID.
-func (s *CouchbaseStore) DeleteMemory(_ context.Context, id string) error {
-	_, err := s.collection.Remove(memoryKey(id), nil)
+func (s *CouchbaseStore) DeleteMemory(ctx context.Context, id string) error {
+	_, err := s.collection.Remove(memoryKey(id), &gocb.RemoveOptions{Context: ctx})
 	if err != nil {
 		if isNotFound(err) {
 			return fmt.Errorf("memory %q not found", id)
@@ -201,7 +199,7 @@ func (s *CouchbaseStore) DeleteMemory(_ context.Context, id string) error {
 }
 
 // CreateAgent persists a new agent document.
-func (s *CouchbaseStore) CreateAgent(_ context.Context, a *Agent) error {
+func (s *CouchbaseStore) CreateAgent(ctx context.Context, a *Agent) error {
 	if a.ID == "" {
 		a.ID = fmt.Sprintf("agent-%d", time.Now().UnixNano())
 	}
@@ -210,7 +208,7 @@ func (s *CouchbaseStore) CreateAgent(_ context.Context, a *Agent) error {
 		a.CreatedAt = time.Now()
 	}
 
-	_, err := s.collection.Insert(agentKey(a.ID), a, nil)
+	_, err := s.collection.Insert(agentKey(a.ID), a, &gocb.InsertOptions{Context: ctx})
 	if err != nil {
 		return fmt.Errorf("CreateAgent insert: %w", err)
 	}
@@ -218,8 +216,8 @@ func (s *CouchbaseStore) CreateAgent(_ context.Context, a *Agent) error {
 }
 
 // GetAgent retrieves an agent by ID. Returns nil, nil when not found.
-func (s *CouchbaseStore) GetAgent(_ context.Context, id string) (*Agent, error) {
-	result, err := s.collection.Get(agentKey(id), nil)
+func (s *CouchbaseStore) GetAgent(ctx context.Context, id string) (*Agent, error) {
+	result, err := s.collection.Get(agentKey(id), &gocb.GetOptions{Context: ctx})
 	if err != nil {
 		if isNotFound(err) {
 			return nil, nil
@@ -235,13 +233,13 @@ func (s *CouchbaseStore) GetAgent(_ context.Context, id string) (*Agent, error) 
 }
 
 // ListAgents returns all agent documents sorted by createdAt ASC.
-func (s *CouchbaseStore) ListAgents(_ context.Context) ([]*Agent, error) {
+func (s *CouchbaseStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	sql := fmt.Sprintf(
 		"SELECT a.* FROM `%s` AS a WHERE a.docType = 'agent' ORDER BY a.createdAt ASC",
 		s.bucketName,
 	)
 
-	rows, err := s.cluster.Query(sql, nil)
+	rows, err := s.cluster.Query(sql, &gocb.QueryOptions{Context: ctx})
 	if err != nil {
 		return nil, fmt.Errorf("ListAgents query: %w", err)
 	}
@@ -262,8 +260,8 @@ func (s *CouchbaseStore) ListAgents(_ context.Context) ([]*Agent, error) {
 }
 
 // DeleteAgent removes an agent document by ID.
-func (s *CouchbaseStore) DeleteAgent(_ context.Context, id string) error {
-	_, err := s.collection.Remove(agentKey(id), nil)
+func (s *CouchbaseStore) DeleteAgent(ctx context.Context, id string) error {
+	_, err := s.collection.Remove(agentKey(id), &gocb.RemoveOptions{Context: ctx})
 	if err != nil {
 		if isNotFound(err) {
 			return fmt.Errorf("agent %q not found", id)
@@ -274,7 +272,7 @@ func (s *CouchbaseStore) DeleteAgent(_ context.Context, id string) error {
 }
 
 // GetStats computes aggregate statistics by running COUNT queries.
-func (s *CouchbaseStore) GetStats(_ context.Context) (*Stats, error) {
+func (s *CouchbaseStore) GetStats(ctx context.Context) (*Stats, error) {
 	// Total memories
 	totalMemSQL := fmt.Sprintf(
 		"SELECT COUNT(*) AS cnt FROM `%s` WHERE docType = 'memory'",
@@ -311,7 +309,7 @@ func (s *CouchbaseStore) GetStats(_ context.Context) (*Stats, error) {
 		"SELECT memoryType, COUNT(*) AS cnt FROM `%s` WHERE docType = 'memory' GROUP BY memoryType",
 		s.bucketName,
 	)
-	rows, err := s.cluster.Query(breakdownSQL, nil)
+	rows, err := s.cluster.Query(breakdownSQL, &gocb.QueryOptions{Context: ctx})
 	if err != nil {
 		return nil, fmt.Errorf("GetStats breakdown query: %w", err)
 	}
@@ -338,6 +336,34 @@ func (s *CouchbaseStore) GetStats(_ context.Context) (*Stats, error) {
 		RecentCount:         recentCount,
 		StorageBackend:      "couchbase",
 	}, nil
+}
+
+// GetMemoryCounts returns a map of agentID to memory count via a single grouped query.
+func (s *CouchbaseStore) GetMemoryCounts(ctx context.Context) (map[string]int, error) {
+	sql := fmt.Sprintf(
+		"SELECT agentId, COUNT(*) AS cnt FROM `%s` WHERE docType = 'memory' GROUP BY agentId",
+		s.bucketName,
+	)
+	rows, err := s.cluster.Query(sql, &gocb.QueryOptions{Context: ctx})
+	if err != nil {
+		return nil, fmt.Errorf("GetMemoryCounts query: %w", err)
+	}
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var row struct {
+			AgentID string `json:"agentId"`
+			Cnt     int    `json:"cnt"`
+		}
+		if err := rows.Row(&row); err != nil {
+			return nil, fmt.Errorf("GetMemoryCounts row decode: %w", err)
+		}
+		counts[row.AgentID] = row.Cnt
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetMemoryCounts rows error: %w", err)
+	}
+	return counts, nil
 }
 
 // queryCount is a helper that runs a COUNT(*) AS cnt query and returns the integer result.

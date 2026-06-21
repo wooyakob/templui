@@ -170,6 +170,22 @@ func (s *InMemoryStore) seed() {
 	s.sortMemories()
 }
 
+// deepCopyMemory returns a copy of m with independent Tags slice and Metadata map.
+func deepCopyMemory(m *Memory) *Memory {
+	cp := *m
+	if m.Tags != nil {
+		cp.Tags = make([]string, len(m.Tags))
+		copy(cp.Tags, m.Tags)
+	}
+	if m.Metadata != nil {
+		cp.Metadata = make(map[string]interface{}, len(m.Metadata))
+		for k, v := range m.Metadata {
+			cp.Metadata[k] = v
+		}
+	}
+	return &cp
+}
+
 // sortMemories re-orders memoryOrder by CreatedAt DESC. Must be called with lock held.
 func (s *InMemoryStore) sortMemories() {
 	sort.Slice(s.memoryOrder, func(i, j int) bool {
@@ -194,9 +210,8 @@ func (s *InMemoryStore) CreateMemory(_ context.Context, m *Memory) error {
 	}
 	m.UpdatedAt = now
 
-	cp := *m
-	s.memories[cp.ID] = &cp
-	s.memoryOrder = append(s.memoryOrder, cp.ID)
+	s.memories[m.ID] = deepCopyMemory(m)
+	s.memoryOrder = append(s.memoryOrder, m.ID)
 	s.sortMemories()
 	return nil
 }
@@ -210,8 +225,7 @@ func (s *InMemoryStore) GetMemory(_ context.Context, id string) (*Memory, error)
 	if !ok {
 		return nil, nil
 	}
-	cp := *m
-	return &cp, nil
+	return deepCopyMemory(m), nil
 }
 
 // ListMemories returns filtered, paginated memories sorted by CreatedAt DESC.
@@ -235,8 +249,7 @@ func (s *InMemoryStore) ListMemories(_ context.Context, filter MemoryFilter) ([]
 				continue
 			}
 		}
-		cp := *m
-		matched = append(matched, &cp)
+		matched = append(matched, deepCopyMemory(m))
 	}
 
 	total := len(matched)
@@ -264,8 +277,7 @@ func (s *InMemoryStore) UpdateMemory(_ context.Context, m *Memory) error {
 		return fmt.Errorf("memory %q not found", m.ID)
 	}
 	m.UpdatedAt = time.Now()
-	cp := *m
-	s.memories[cp.ID] = &cp
+	s.memories[m.ID] = deepCopyMemory(m)
 	return nil
 }
 
@@ -374,6 +386,18 @@ func (s *InMemoryStore) GetStats(_ context.Context) (*Stats, error) {
 		RecentCount:         recentCount,
 		StorageBackend:      "inmemory",
 	}, nil
+}
+
+// GetMemoryCounts returns a map of agentID to memory count in a single pass.
+func (s *InMemoryStore) GetMemoryCounts(_ context.Context) (map[string]int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	counts := make(map[string]int)
+	for _, m := range s.memories {
+		counts[m.AgentID]++
+	}
+	return counts, nil
 }
 
 // Close is a no-op for the in-memory store.

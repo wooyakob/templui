@@ -46,8 +46,16 @@ func main() {
 		middleware.CacheControlMiddleware(mux),
 	)
 
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      wrappedMux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
 	log.Printf("Agent Memory System running at http://localhost:%s/memory", port)
-	if err := http.ListenAndServe(":"+port, wrappedMux); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }
@@ -389,6 +397,11 @@ func updateMemoryHandler(w http.ResponseWriter, r *http.Request, store memstore.
 	tagsRaw := r.FormValue("tags")
 	importanceStr := r.FormValue("importance")
 
+	if agentID == "" || content == "" {
+		http.Error(w, "Agent and content are required", http.StatusBadRequest)
+		return
+	}
+
 	importance, _ := strconv.Atoi(importanceStr)
 	if importance < 1 {
 		importance = 3
@@ -401,9 +414,16 @@ func updateMemoryHandler(w http.ResponseWriter, r *http.Request, store memstore.
 	agentName := existing.AgentName
 	if agentID != existing.AgentID {
 		agent, err := store.GetAgent(ctx, agentID)
-		if err == nil && agent != nil {
-			agentName = agent.Name
+		if err != nil {
+			log.Printf("GetAgent error: %v", err)
+			http.Error(w, "Failed to look up agent", http.StatusInternalServerError)
+			return
 		}
+		if agent == nil {
+			http.Error(w, "Agent not found", http.StatusBadRequest)
+			return
+		}
+		agentName = agent.Name
 	}
 
 	existing.AgentID = agentID
@@ -447,13 +467,10 @@ func agentsListHandler(w http.ResponseWriter, r *http.Request, store memstore.St
 		return
 	}
 
-	// Build memory count map
-	memoryCounts := make(map[string]int)
-	for _, a := range agents {
-		_, count, err := store.ListMemories(ctx, memstore.MemoryFilter{AgentID: a.ID})
-		if err == nil {
-			memoryCounts[a.ID] = count
-		}
+	memoryCounts, err := store.GetMemoryCounts(ctx)
+	if err != nil {
+		log.Printf("GetMemoryCounts error: %v", err)
+		memoryCounts = make(map[string]int)
 	}
 
 	stats, _ := store.GetStats(ctx)
