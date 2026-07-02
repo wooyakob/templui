@@ -1,0 +1,91 @@
+package memorypages
+
+import (
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/internal/ui/layouts"
+)
+
+// NavItem represents a sidebar navigation item
+type NavItem struct {
+	Label  string
+	Href   string
+	Active bool
+}
+
+templ MemoryAppLayout(title string, activeNav string, storageBackend string) {
+	@layouts.BaseLayout(title+" — Agent Memory", "Agent memory management powered by Couchbase") {
+		<div class="flex h-screen flex-col overflow-hidden">
+			<header class="border-b bg-background/95 backdrop-blur-sm px-6 py-3 flex items-center justify-between shrink-0 z-10">
+				<div class="flex items-center gap-3">
+					<div class="flex items-center gap-2">
+						@icon.BrainCircuit(icon.Props{Class: "size-6 text-primary"})
+						<span class="font-bold text-lg">Agent Memory</span>
+					</div>
+					<div class="h-5 w-px bg-border mx-1"></div>
+					<span class="text-sm text-muted-foreground">{ title }</span>
+				</div>
+				<div class="flex items-center gap-3">
+					<div class="flex items-center gap-1.5 text-xs">
+						if storageBackend == "couchbase" {
+							<span class="size-2 rounded-full bg-green-500 inline-block"></span>
+							<span class="text-muted-foreground">Couchbase</span>
+						} else {
+							<span class="size-2 rounded-full bg-yellow-500 inline-block"></span>
+							<span class="text-muted-foreground">In-Memory</span>
+						}
+					</div>
+					@icon.Database(icon.Props{Class: "size-4 text-muted-foreground"})
+				</div>
+			</header>
+			<div class="flex flex-1 overflow-hidden">
+				<aside class="w-56 border-r bg-background/50 overflow-y-auto shrink-0 py-4 px-3">
+					<nav class="space-y-1">
+						@memoryNavItem(NavItem{Label: "Dashboard", Href: "/memory", Active: activeNav == "dashboard"}) {
+							@icon.Activity(icon.Props{Class: "size-4"})
+						}
+						@memoryNavItem(NavItem{Label: "Memories", Href: "/memory/memories", Active: activeNav == "memories"}) {
+							@icon.Notebook(icon.Props{Class: "size-4"})
+						}
+						@memoryNavItem(NavItem{Label: "Agents", Href: "/memory/agents", Active: activeNav == "agents"}) {
+							@icon.Bot(icon.Props{Class: "size-4"})
+						}
+					</nav>
+					<div class="mt-8 pt-4 border-t">
+						<p class="text-xs font-medium text-muted-foreground px-3 mb-2">Quick Actions</p>
+						<a
+							href="/memory/memories/new"
+							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-primary hover:bg-primary/10 transition-colors font-medium"
+						>
+							@icon.Plus(icon.Props{Class: "size-4"})
+							New Memory
+						</a>
+						<a
+							href="/memory/agents/new"
+							class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+						>
+							@icon.Plus(icon.Props{Class: "size-4"})
+							New Agent
+						</a>
+					</div>
+				</aside>
+				<main class="flex-1 overflow-y-auto p-6 bg-background/30" id="memory-main">
+					{ children... }
+				</main>
+			</div>
+		</div>
+	}
+}
+
+templ memoryNavItem(item NavItem) {
+	<a
+		href={ templ.SafeURL(item.Href) }
+		class={
+			"flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+			templ.KV("bg-primary text-primary-foreground font-medium", item.Active),
+			templ.KV("text-muted-foreground hover:bg-accent hover:text-accent-foreground", !item.Active),
+		}
+	>
+		{ children... }
+		{ item.Label }
+	</a>
+}

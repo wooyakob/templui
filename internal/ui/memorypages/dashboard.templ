@@ -1,0 +1,183 @@
+package memorypages
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/internal/memory"
+)
+
+templ Dashboard(stats *memory.Stats, recentMemories []*memory.Memory, storageBackend string) {
+	@MemoryAppLayout("Dashboard", "dashboard", storageBackend) {
+		<div class="max-w-6xl mx-auto space-y-8">
+			<div class="flex items-center justify-between">
+				<div>
+					<h1 class="text-2xl font-bold tracking-tight">Dashboard</h1>
+					<p class="text-muted-foreground mt-1">Overview of your agent memory system</p>
+				</div>
+				@button.Button(button.Props{Href: "/memory/memories/new", Size: button.SizeSm}) {
+					@icon.Plus(icon.Props{Class: "size-4"})
+					New Memory
+				}
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+				@dashStatCard("Total Memories", strconv.Itoa(stats.TotalMemories), "Across all agents", "brain") {
+					@icon.Brain(icon.Props{Class: "size-5 text-primary"})
+				}
+				@dashStatCard("Total Agents", strconv.Itoa(stats.TotalAgents), "Registered agents", "bot") {
+					@icon.Bot(icon.Props{Class: "size-5 text-blue-500"})
+				}
+				@dashStatCard("Memory Types", strconv.Itoa(len(stats.MemoryTypeBreakdown)), "Distinct types in use", "notebook") {
+					@icon.Notebook(icon.Props{Class: "size-5 text-green-500"})
+				}
+				@dashStatCard("Recent (24h)", strconv.Itoa(stats.RecentCount), "New memories today", "activity") {
+					@icon.Activity(icon.Props{Class: "size-5 text-orange-500"})
+				}
+			</div>
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<div class="lg:col-span-2">
+					@card.Card() {
+						@card.Header() {
+							<div class="flex items-center justify-between">
+								@card.Title() {
+									Recent Memories
+								}
+								@button.Button(button.Props{Href: "/memory/memories", Variant: button.VariantOutline, Size: button.SizeSm}) {
+									View All
+								}
+							</div>
+						}
+						@card.Content(card.ContentProps{Class: "pt-4"}) {
+							if len(recentMemories) == 0 {
+								<div class="text-center py-10 text-muted-foreground">
+									<div class="flex justify-center mb-3">
+										@icon.Notebook(icon.Props{Class: "size-10 opacity-30"})
+									</div>
+									<p class="text-sm">No memories yet.</p>
+									<p class="text-xs mt-1">Create your first memory to get started.</p>
+								</div>
+							} else {
+								<div class="space-y-0 divide-y divide-border">
+									for _, m := range recentMemories {
+										<div class="py-3 flex items-start gap-3">
+											<div class="flex-1 min-w-0">
+												<p class="text-sm text-foreground leading-snug truncate">{ m.Truncate(90) }</p>
+												<div class="flex items-center gap-2 mt-1.5">
+													<span class={ "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium", m.MemoryType.BadgeClass() }>
+														{ m.MemoryType.Label() }
+													</span>
+													<span class="text-xs text-muted-foreground">{ m.AgentName }</span>
+												</div>
+											</div>
+											<a
+												href={ templ.SafeURL(fmt.Sprintf("/memory/memories/%s", m.ID)) }
+												class="shrink-0 p-1 rounded hover:bg-accent transition-colors"
+												aria-label="View memory"
+											>
+												@icon.Eye(icon.Props{Class: "size-4 text-muted-foreground"})
+											</a>
+										</div>
+									}
+								</div>
+							}
+						}
+					}
+				</div>
+				<div class="space-y-4">
+					@card.Card() {
+						@card.Header() {
+							@card.Title() {
+								Memory Types
+							}
+						}
+						@card.Content(card.ContentProps{Class: "pt-4"}) {
+							if len(stats.MemoryTypeBreakdown) == 0 {
+								<p class="text-sm text-muted-foreground text-center py-4">No data yet</p>
+							} else {
+								<div class="space-y-3">
+									for _, mt := range []memory.MemoryType{memory.MemoryTypeEpisodic, memory.MemoryTypeSemantic, memory.MemoryTypeProcedural, memory.MemoryTypeFactual} {
+										{{ count := stats.MemoryTypeBreakdown[mt] }}
+										if count > 0 {
+											<div class="flex items-center justify-between">
+												<div class="flex items-center gap-2">
+													<span class={ "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium", mt.BadgeClass() }>
+														{ mt.Label() }
+													</span>
+												</div>
+												<span class="text-sm font-semibold tabular-nums">{ strconv.Itoa(count) }</span>
+											</div>
+										}
+									}
+								</div>
+							}
+						}
+					}
+					@card.Card() {
+						@card.Header() {
+							@card.Title() {
+								Storage Backend
+							}
+						}
+						@card.Content(card.ContentProps{Class: "pt-4"}) {
+							<div class="flex items-center gap-3">
+								@icon.Database(icon.Props{Class: "size-8 text-muted-foreground/50"})
+								<div>
+									if storageBackend == "couchbase" {
+										<p class="text-sm font-semibold">Couchbase</p>
+										<p class="text-xs text-muted-foreground">Connected</p>
+									} else {
+										<p class="text-sm font-semibold">In-Memory</p>
+										<p class="text-xs text-muted-foreground">Development mode</p>
+									}
+								</div>
+							</div>
+						}
+					}
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ dashStatCard(title, value, subtitle, _ string) {
+	@card.Card() {
+		@card.Content(card.ContentProps{Class: "p-5"}) {
+			<div class="flex items-start justify-between">
+				<div>
+					<p class="text-sm text-muted-foreground">{ title }</p>
+					<p class="text-3xl font-bold mt-1 tabular-nums">{ value }</p>
+					<p class="text-xs text-muted-foreground mt-1">{ subtitle }</p>
+				</div>
+				<div class="p-2 bg-muted rounded-lg">
+					{ children... }
+				</div>
+			</div>
+		}
+	}
+}
+
+// importanceBadge renders a visual importance indicator (filled/hollow dots).
+templ importanceBadge(importance int) {
+	<div class="flex items-center gap-0.5">
+		for i := 1; i <= 5; i++ {
+			<span
+				class={
+					"size-2 rounded-full",
+					templ.KV("bg-primary", i <= importance),
+					templ.KV("bg-muted", i > importance),
+				}
+			></span>
+		}
+	</div>
+}
+
+// memoryTypeBadge renders a styled badge for a memory type.
+templ memoryTypeBadge(mt memory.MemoryType) {
+	@badge.Badge(badge.Props{Class: mt.BadgeClass()}) {
+		{ mt.Label() }
+	}
+}

@@ -1,0 +1,187 @@
+package memorypages
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/internal/memory"
+)
+
+templ MemoriesList(memories []*memory.Memory, agents []*memory.Agent, filter memory.MemoryFilter, total int, storageBackend string) {
+	@MemoryAppLayout("Memories", "memories", storageBackend) {
+		<div class="max-w-6xl mx-auto space-y-6">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<h1 class="text-2xl font-bold tracking-tight">Memories</h1>
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(total) }
+					}
+				</div>
+				@button.Button(button.Props{Href: "/memory/memories/new", Size: button.SizeSm}) {
+					@icon.Plus(icon.Props{Class: "size-4"})
+					New Memory
+				}
+			</div>
+			<form id="filter-form" class="flex flex-wrap items-end gap-3">
+				<div class="flex-1 min-w-48">
+					<label class="text-xs font-medium text-muted-foreground mb-1.5 block">Search</label>
+					@input.Input(input.Props{
+						Name:        "q",
+						Placeholder: "Search content or agent…",
+						Value:       filter.Query,
+						Attributes: templ.Attributes{
+							"hx-get":     "/memory/api/memories",
+							"hx-trigger": "input changed delay:300ms",
+							"hx-target":  "#memories-table-container",
+							"hx-include": "#filter-form",
+						},
+					})
+				</div>
+				<div class="min-w-40">
+					<label class="text-xs font-medium text-muted-foreground mb-1.5 block">Agent</label>
+					<select
+						name="agentId"
+						class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring dark:bg-input/30 transition-colors"
+						hx-get="/memory/api/memories"
+						hx-trigger="change"
+						hx-target="#memories-table-container"
+						hx-include="#filter-form"
+					>
+						<option value="">All Agents</option>
+						for _, a := range agents {
+							<option
+								value={ a.ID }
+								selected?={ a.ID == filter.AgentID }
+							>{ a.Name }</option>
+						}
+					</select>
+				</div>
+				<div class="min-w-44">
+					<label class="text-xs font-medium text-muted-foreground mb-1.5 block">Memory Type</label>
+					<select
+						name="type"
+						class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring dark:bg-input/30 transition-colors"
+						hx-get="/memory/api/memories"
+						hx-trigger="change"
+						hx-target="#memories-table-container"
+						hx-include="#filter-form"
+					>
+						<option value="">All Types</option>
+						<option
+							value="episodic"
+							selected?={ filter.Type == memory.MemoryTypeEpisodic }
+						>Episodic</option>
+						<option
+							value="semantic"
+							selected?={ filter.Type == memory.MemoryTypeSemantic }
+						>Semantic</option>
+						<option
+							value="procedural"
+							selected?={ filter.Type == memory.MemoryTypeProcedural }
+						>Procedural</option>
+						<option
+							value="factual"
+							selected?={ filter.Type == memory.MemoryTypeFactual }
+						>Factual</option>
+					</select>
+				</div>
+			</form>
+			<div id="memories-table-container">
+				@MemoriesTable(memories, total)
+			</div>
+		</div>
+	}
+}
+
+templ MemoriesTable(memories []*memory.Memory, total int) {
+	@card.Card() {
+		@card.Content(card.ContentProps{Class: "p-0"}) {
+			if len(memories) == 0 {
+				<div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+					@icon.Notebook(icon.Props{Class: "size-12 opacity-20 mb-4"})
+					<p class="text-sm font-medium">No memories found</p>
+					<p class="text-xs mt-1 mb-4">Try adjusting your filters or create a new memory.</p>
+					@button.Button(button.Props{Href: "/memory/memories/new", Variant: button.VariantOutline, Size: button.SizeSm}) {
+						@icon.Plus(icon.Props{Class: "size-4"})
+						New Memory
+					}
+				</div>
+			} else {
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b bg-muted/30">
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Content</th>
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Agent</th>
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</th>
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Tags</th>
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Importance</th>
+								<th class="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Created</th>
+								<th class="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-border">
+							for _, m := range memories {
+								<tr class="hover:bg-muted/30 transition-colors group">
+									<td class="px-4 py-3 max-w-xs">
+										<span class="text-foreground leading-snug line-clamp-2">{ m.Truncate(80) }</span>
+									</td>
+									<td class="px-4 py-3 whitespace-nowrap">
+										<span class="text-muted-foreground text-xs">{ m.AgentName }</span>
+									</td>
+									<td class="px-4 py-3 whitespace-nowrap">
+										<span class={ "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium", m.MemoryType.BadgeClass() }>
+											{ m.MemoryType.Label() }
+										</span>
+									</td>
+									<td class="px-4 py-3">
+										<div class="flex flex-wrap gap-1">
+											for _, tag := range m.Tags {
+												@badge.Badge(badge.Props{Variant: badge.VariantOutline, Class: "text-xs"}) {
+													{ tag }
+												}
+											}
+										</div>
+									</td>
+									<td class="px-4 py-3">
+										<div class="flex items-center gap-0.5">
+											for i := 1; i <= 5; i++ {
+												<span
+													class={
+														"size-2 rounded-full",
+														templ.KV("bg-primary", i <= m.Importance),
+														templ.KV("bg-muted border border-border", i > m.Importance),
+													}
+												></span>
+											}
+										</div>
+									</td>
+									<td class="px-4 py-3 whitespace-nowrap">
+										<span class="text-xs text-muted-foreground">{ m.CreatedAt.Format("Jan 2, 2006") }</span>
+									</td>
+									<td class="px-4 py-3 text-right">
+										<a
+											href={ templ.SafeURL(fmt.Sprintf("/memory/memories/%s", m.ID)) }
+											class="inline-flex items-center justify-center size-8 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors opacity-0 group-hover:opacity-100"
+											aria-label="View memory"
+										>
+											@icon.Eye(icon.Props{Class: "size-4"})
+										</a>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="px-4 py-3 border-t text-xs text-muted-foreground">
+					Showing { strconv.Itoa(len(memories)) } of { strconv.Itoa(total) } memories
+				</div>
+			}
+		}
+	}
+}

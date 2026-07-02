@@ -1,0 +1,319 @@
+package memorypages
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/textarea"
+	"github.com/templui/templui/internal/memory"
+)
+
+templ MemoryDetail(m *memory.Memory, storageBackend string) {
+	@MemoryAppLayout("Memory Detail", "memories", storageBackend) {
+		<div class="max-w-4xl mx-auto space-y-6">
+			<div class="flex items-center gap-2">
+				<a
+					href="/memory/memories"
+					class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+				>
+					@icon.ArrowLeft(icon.Props{Class: "size-4"})
+					Back to Memories
+				</a>
+			</div>
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<div class="lg:col-span-2 space-y-4">
+					@card.Card() {
+						@card.Header() {
+							<div class="flex items-start justify-between gap-4">
+								<div class="flex-1 min-w-0">
+									@card.Title() {
+										Memory Content
+									}
+								</div>
+								<div class="flex items-center gap-2 shrink-0">
+									@button.Button(button.Props{
+										Href:    fmt.Sprintf("/memory/memories/%s/edit", m.ID),
+										Variant: button.VariantOutline,
+										Size:    button.SizeSm,
+									}) {
+										@icon.Pencil(icon.Props{Class: "size-4"})
+										Edit
+									}
+									<button
+										class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all h-8 px-3 bg-destructive text-white hover:bg-destructive/90 cursor-pointer"
+										hx-delete={ fmt.Sprintf("/memory/memories/%s", m.ID) }
+										hx-confirm="Are you sure you want to delete this memory? This action cannot be undone."
+										hx-redirect="/memory/memories"
+									>
+										@icon.Trash2(icon.Props{Class: "size-4"})
+										Delete
+									</button>
+								</div>
+							</div>
+						}
+						@card.Content(card.ContentProps{Class: "pt-4"}) {
+							<p class="text-sm leading-relaxed whitespace-pre-wrap text-foreground">{ m.Content }</p>
+						}
+					}
+					if len(m.Tags) > 0 {
+						@card.Card() {
+							@card.Header() {
+								@card.Title() {
+									Tags
+								}
+							}
+							@card.Content(card.ContentProps{Class: "pt-4"}) {
+								<div class="flex flex-wrap gap-2">
+									for _, tag := range m.Tags {
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ tag }
+										}
+									}
+								</div>
+							}
+						}
+					}
+				</div>
+				<div class="space-y-4">
+					@card.Card() {
+						@card.Header() {
+							@card.Title() {
+								Metadata
+							}
+						}
+						@card.Content(card.ContentProps{Class: "pt-4 space-y-4"}) {
+							<div>
+								<p class="text-xs font-medium text-muted-foreground mb-1">Agent</p>
+								<div class="flex items-center gap-2">
+									@icon.Bot(icon.Props{Class: "size-4 text-muted-foreground"})
+									<span class="text-sm font-medium">{ m.AgentName }</span>
+								</div>
+							</div>
+							<div>
+								<p class="text-xs font-medium text-muted-foreground mb-1">Memory Type</p>
+								<span class={ "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium", m.MemoryType.BadgeClass() }>
+									{ m.MemoryType.Label() }
+								</span>
+							</div>
+							<div>
+								<p class="text-xs font-medium text-muted-foreground mb-1">Importance</p>
+								<div class="flex items-center gap-1.5">
+									<div class="flex items-center gap-0.5">
+										for i := 1; i <= 5; i++ {
+											<span
+												class={
+													"size-3 rounded-full",
+													templ.KV("bg-primary", i <= m.Importance),
+													templ.KV("bg-muted border border-border", i > m.Importance),
+												}
+											></span>
+										}
+									</div>
+									<span class="text-xs text-muted-foreground">{ strconv.Itoa(m.Importance) } / 5</span>
+								</div>
+							</div>
+							<div class="pt-2 border-t space-y-3">
+								<div>
+									<p class="text-xs font-medium text-muted-foreground mb-0.5">Created</p>
+									<p class="text-xs text-foreground">{ m.CreatedAt.Format("Jan 2, 2006 at 3:04 PM") }</p>
+								</div>
+								<div>
+									<p class="text-xs font-medium text-muted-foreground mb-0.5">Last Updated</p>
+									<p class="text-xs text-foreground">{ m.UpdatedAt.Format("Jan 2, 2006 at 3:04 PM") }</p>
+								</div>
+								<div>
+									<p class="text-xs font-medium text-muted-foreground mb-0.5">ID</p>
+									<p class="text-xs font-mono text-muted-foreground break-all">{ m.ID }</p>
+								</div>
+							</div>
+						}
+					}
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ MemoryForm(agents []*memory.Agent, m *memory.Memory, isEdit bool, storageBackend string) {
+	{{ pageTitle := "New Memory" }}
+	if isEdit {
+		{{ pageTitle = "Edit Memory" }}
+	}
+	@MemoryAppLayout(pageTitle, "memories", storageBackend) {
+		<div class="max-w-2xl mx-auto space-y-6">
+			<div class="flex items-center gap-2">
+				<a
+					href="/memory/memories"
+					class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+				>
+					@icon.ArrowLeft(icon.Props{Class: "size-4"})
+					Back to Memories
+				</a>
+			</div>
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						{ pageTitle }
+					}
+					if isEdit {
+						<p class="text-sm text-muted-foreground mt-1">Update the memory details below.</p>
+					} else {
+						<p class="text-sm text-muted-foreground mt-1">Add a new memory to an agent's knowledge base.</p>
+					}
+				}
+				@card.Content(card.ContentProps{Class: "pt-6"}) {
+					{{ formAction := "/memory/memories" }}
+					if isEdit {
+						{{ formAction = fmt.Sprintf("/memory/memories/%s", m.ID) }}
+					}
+					<form
+						action={ templ.SafeURL(formAction) }
+						method="POST"
+						class="space-y-5"
+					>
+						if isEdit {
+							<input type="hidden" name="_method" value="PUT"/>
+						}
+						<div class="space-y-1.5">
+							<label for="agentId" class="text-sm font-medium">Agent</label>
+							<select
+								id="agentId"
+								name="agentId"
+								required
+								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring dark:bg-input/30 transition-colors"
+							>
+								<option value="">Select an agent…</option>
+								for _, a := range agents {
+									<option
+										value={ a.ID }
+										selected?={ isEdit && m.AgentID == a.ID }
+									>{ a.Name }</option>
+								}
+							</select>
+						</div>
+						<div class="space-y-1.5">
+							<label for="content" class="text-sm font-medium">Content</label>
+							@textarea.Textarea(textarea.Props{
+								ID:          "content",
+								Name:        "content",
+								Placeholder: "Enter the memory content…",
+								Rows:        5,
+								Value:       memoryContent(m, isEdit),
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label for="memoryType" class="text-sm font-medium">Memory Type</label>
+							<select
+								id="memoryType"
+								name="memoryType"
+								required
+								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring dark:bg-input/30 transition-colors"
+							>
+								<option value="">Select a type…</option>
+								<option
+									value="episodic"
+									selected?={ isEdit && m.MemoryType == memory.MemoryTypeEpisodic }
+								>Episodic — specific past events or interactions</option>
+								<option
+									value="semantic"
+									selected?={ isEdit && m.MemoryType == memory.MemoryTypeSemantic }
+								>Semantic — general knowledge and concepts</option>
+								<option
+									value="procedural"
+									selected?={ isEdit && m.MemoryType == memory.MemoryTypeProcedural }
+								>Procedural — how-to instructions and steps</option>
+								<option
+									value="factual"
+									selected?={ isEdit && m.MemoryType == memory.MemoryTypeFactual }
+								>Factual — objective facts and data</option>
+							</select>
+						</div>
+						<div class="space-y-1.5">
+							<label for="tags" class="text-sm font-medium">Tags</label>
+							@input.Input(input.Props{
+								ID:          "tags",
+								Name:        "tags",
+								Placeholder: "e.g. golang, best-practices, debugging",
+								Value:       tagsToString(m, isEdit),
+							})
+							<p class="text-xs text-muted-foreground">Comma-separated list of tags.</p>
+						</div>
+						<div class="space-y-1.5">
+							<label for="importance" class="text-sm font-medium">
+								Importance
+								<span id="importance-display" class="text-muted-foreground font-normal ml-1">
+									if isEdit {
+										({ strconv.Itoa(m.Importance) })
+									} else {
+										(3)
+									}
+								</span>
+							</label>
+							<input
+								id="importance"
+								name="importance"
+								type="range"
+								min="1"
+								max="5"
+								value={ importanceValue(m, isEdit) }
+								class="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary bg-muted"
+								oninput="document.getElementById('importance-display').textContent = '(' + this.value + ')'"
+							/>
+							<div class="flex justify-between text-xs text-muted-foreground">
+								<span>Low (1)</span>
+								<span>High (5)</span>
+							</div>
+						</div>
+						<div class="flex items-center justify-between pt-2 border-t">
+							<a
+								href="/memory/memories"
+								class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+							>
+								Cancel
+							</a>
+							@button.Button(button.Props{Type: button.TypeSubmit}) {
+								if isEdit {
+									@icon.Pencil(icon.Props{Class: "size-4"})
+									Update Memory
+								} else {
+									@icon.Plus(icon.Props{Class: "size-4"})
+									Create Memory
+								}
+							}
+						</div>
+					</form>
+				}
+			}
+		</div>
+	}
+}
+
+// memoryContent returns the content value for the form (empty string for new memories).
+func memoryContent(m *memory.Memory, isEdit bool) string {
+	if isEdit && m != nil {
+		return m.Content
+	}
+	return ""
+}
+
+// tagsToString returns a comma-separated string of tags for the form.
+func tagsToString(m *memory.Memory, isEdit bool) string {
+	if isEdit && m != nil && len(m.Tags) > 0 {
+		return strings.Join(m.Tags, ", ")
+	}
+	return ""
+}
+
+// importanceValue returns the importance as a string for the range input.
+func importanceValue(m *memory.Memory, isEdit bool) string {
+	if isEdit && m != nil {
+		return strconv.Itoa(m.Importance)
+	}
+	return "3"
+}
